@@ -47,34 +47,6 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
         }
     """)
 
-    fun `test extract pub visibility`() = doAvailableTest("""
-        enum A {
-            /*caret*/V1 { pub a: i32, pub(crate) b: bool, c: String },
-            V2
-        }
-    """, """
-        struct /*caret*/V1 { pub a: i32, pub(crate) b: bool, c: String }
-
-        enum A {
-            V1(pub V1),
-            V2
-        }
-    """)
-
-    fun `test extract crate visibility`() = doAvailableTest("""
-        enum A {
-            /*caret*/V1 { a: i32, pub(crate) b: bool, c: String },
-            V2
-        }
-    """, """
-        struct /*caret*/V1 { a: i32, pub(crate) b: bool, c: String }
-
-        enum A {
-            V1(pub(crate) V1),
-            V2
-        }
-    """)
-
     fun `test generic type`() = doAvailableTest("""
         enum A<T> {
             /*caret*/V1(T),

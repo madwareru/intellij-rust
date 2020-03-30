@@ -14,7 +14,10 @@ import org.rust.ide.refactoring.RsInPlaceVariableIntroducer
 import org.rust.lang.core.ARBITRARY_ENUM_DISCRIMINANT
 import org.rust.lang.core.FeatureAvailability
 import org.rust.lang.core.psi.*
-import org.rust.lang.core.psi.ext.*
+import org.rust.lang.core.psi.ext.ancestorStrict
+import org.rust.lang.core.psi.ext.bounds
+import org.rust.lang.core.psi.ext.isFieldless
+import org.rust.lang.core.psi.ext.parentEnum
 import org.rust.lang.core.types.consts.Const
 import org.rust.lang.core.types.consts.CtConstParameter
 import org.rust.lang.core.types.infer.TypeVisitor
@@ -57,13 +60,16 @@ class ExtractEnumVariantIntention : RsElementBaseIntentionAction<ExtractEnumVari
 
         val struct = element.createStruct(name, typeParametersText, whereClause)
         val inserted = enum.parent.addBefore(struct, enum) as RsStructItem
-        val visibility = element.visibility
 
         for (usage in ReferencesSearch.search(ctx.variant)) {
             element.replaceUsage(usage.element, name)
         }
 
-        val newFields = factory.createTupleFields(listOf(RsPsiFactory.TupleField(visibility, inserted.declaredType)))
+        val tupleField = RsPsiFactory.TupleField(
+            inserted.declaredType,
+            addPub = false // enum variant's fields are pub by default
+        )
+        val newFields = factory.createTupleFields(listOf(tupleField))
         val replaced = element.toBeReplaced.replace(newFields)
 
         offerStructRename(project, editor, inserted, replaced)
@@ -179,7 +185,6 @@ class ExtractEnumVariantIntention : RsElementBaseIntentionAction<ExtractEnumVari
 }
 
 private sealed class VariantElement(val toBeReplaced: PsiElement) {
-    abstract val visibility: RsVis?
     abstract val typeReferences: List<RsTypeReference>
     protected val factory: RsPsiFactory get() = RsPsiFactory(toBeReplaced.project)
 
@@ -189,7 +194,6 @@ private sealed class VariantElement(val toBeReplaced: PsiElement) {
 }
 
 private class TupleVariant(val fields: RsTupleFields) : VariantElement(fields) {
-    override val visibility: RsVis? = extractVisibility(fields.tupleFieldDeclList.mapNotNull { it.vis })
     override val typeReferences: List<RsTypeReference> = fields.tupleFieldDeclList.map { it.typeReference }
 
     override fun createStruct(name: String, typeParameters: String, whereClause: String): RsStructItem =
@@ -226,7 +230,6 @@ private class TupleVariant(val fields: RsTupleFields) : VariantElement(fields) {
 }
 
 private class StructVariant(val fields: RsBlockFields) : VariantElement(fields) {
-    override val visibility: RsVis? = extractVisibility(fields.namedFieldDeclList.mapNotNull { it.vis })
     override val typeReferences: List<RsTypeReference> = fields.namedFieldDeclList.mapNotNull { it.typeReference }
 
     override fun createStruct(name: String, typeParameters: String, whereClause: String): RsStructItem =
@@ -254,16 +257,6 @@ private class StructVariant(val fields: RsBlockFields) : VariantElement(fields) 
         return true
     }
 }
-
-private fun extractVisibility(visibilities: List<RsVis>): RsVis? =
-    visibilities.maxBy {
-        when (val visibility = it.visibility) {
-            is RsVisibility.Public -> 4
-            is RsVisibility.Restricted ->
-                if (visibility.inMod == it.crateRoot) 3 else 2
-            is RsVisibility.Private -> 1
-        }
-    }
 
 private data class CollectTypeParametersVisitor(
     val parameters: Map<String, RsTypeParameter>,
