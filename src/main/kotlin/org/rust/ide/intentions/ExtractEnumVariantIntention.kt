@@ -58,7 +58,7 @@ class ExtractEnumVariantIntention : RsElementBaseIntentionAction<ExtractEnumVari
         val whereClause = buildWhereClause(enum.whereClause, parameters)
         val name = ctx.variant.name ?: return
 
-        val struct = element.createStruct(name, typeParametersText, whereClause)
+        val struct = element.createStruct(enum.vis?.text, name, typeParametersText, whereClause)
         val inserted = enum.parent.addBefore(struct, enum) as RsStructItem
 
         for (usage in ReferencesSearch.search(ctx.variant)) {
@@ -188,7 +188,7 @@ private sealed class VariantElement(val toBeReplaced: PsiElement) {
     abstract val typeReferences: List<RsTypeReference>
     protected val factory: RsPsiFactory get() = RsPsiFactory(toBeReplaced.project)
 
-    abstract fun createStruct(name: String, typeParameters: String, whereClause: String): RsStructItem
+    abstract fun createStruct(vis: String?, name: String, typeParameters: String, whereClause: String): RsStructItem
 
     abstract fun replaceUsage(element: PsiElement, name: String)
 }
@@ -196,8 +196,10 @@ private sealed class VariantElement(val toBeReplaced: PsiElement) {
 private class TupleVariant(val fields: RsTupleFields) : VariantElement(fields) {
     override val typeReferences: List<RsTypeReference> = fields.tupleFieldDeclList.map { it.typeReference }
 
-    override fun createStruct(name: String, typeParameters: String, whereClause: String): RsStructItem =
-        factory.createStruct("struct $name$typeParameters${fields.text}$whereClause;")
+    override fun createStruct(vis: String?, name: String, typeParameters: String, whereClause: String): RsStructItem {
+        val formattedVis = if (vis == null) "" else "$vis "
+        return factory.createStruct("${formattedVis}struct $name$typeParameters${fields.text}$whereClause;")
+    }
 
     override fun replaceUsage(element: PsiElement, name: String) {
         if (replaceTuplePattern(element, name)) return
@@ -232,8 +234,10 @@ private class TupleVariant(val fields: RsTupleFields) : VariantElement(fields) {
 private class StructVariant(val fields: RsBlockFields) : VariantElement(fields) {
     override val typeReferences: List<RsTypeReference> = fields.namedFieldDeclList.mapNotNull { it.typeReference }
 
-    override fun createStruct(name: String, typeParameters: String, whereClause: String): RsStructItem =
-        factory.createStruct("struct $name$typeParameters$whereClause${fields.text}")
+    override fun createStruct(vis: String?, name: String, typeParameters: String, whereClause: String): RsStructItem {
+        val formattedVis = if (vis == null) "" else "$vis "
+        return factory.createStruct("${formattedVis}struct $name$typeParameters$whereClause${fields.text}")
+    }
 
     override fun replaceUsage(element: PsiElement, name: String) {
         if (replaceStructPattern(element, name)) return

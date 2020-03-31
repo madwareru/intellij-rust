@@ -374,4 +374,18 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
             let v = E::V1(V1(1, /*comment*/ 2));
         }
     """)
+
+    fun `test generated struct has same visibility`() = doAvailableTest("""
+        pub enum A {
+            /*caret*/V1 { a: i32, b: bool, c: String },
+            V2
+        }
+    """, """
+        pub struct /*caret*/V1 { a: i32, b: bool, c: String }
+
+        pub enum A {
+            V1(V1),
+            V2
+        }
+    """)
 }
