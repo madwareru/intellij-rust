@@ -416,4 +416,69 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
             V2
         }
     """)
+
+    fun `test import generated struct if needed`() = doAvailableTest("""
+        use a::E;
+
+        mod a {
+            pub enum E {
+                /*caret*/V1 { x: i32, y: i32 },
+                V2
+            }
+        }
+        
+        fn main() {
+            let _ = E::V1 { x: 0, y: 1 };
+        }
+    """, """
+        use a::{E, V1};
+
+        mod a {
+            pub struct /*caret*/V1 { pub x: i32, pub y: i32 }
+
+            pub enum E {
+                V1(V1),
+                V2
+            }
+        }
+        
+        fn main() {
+            let _ = E::V1(V1 { x: 0, y: 1 });
+        }
+    """)
+
+    // TODO: fix
+    fun `test don't import generated struct if its name already in scope`() = doAvailableTest("""
+        use a::E;
+        
+        struct V1;
+
+        mod a {
+            pub enum E {
+                /*caret*/V1 { x: i32, y: i32 },
+                V2
+            }
+        }
+        
+        fn main() {
+            let _ = E::V1 { x: 0, y: 1 };
+        }
+    """, """
+        use a::E;
+        
+        struct V1;
+
+        mod a {
+            pub struct /*caret*/V1 { pub x: i32, pub y: i32 }
+
+            pub enum E {
+                V1(V1),
+                V2
+            }
+        }
+        
+        fn main() {
+            let _ = E::V1(V1 { x: 0, y: 1 });
+        }
+    """)
 }

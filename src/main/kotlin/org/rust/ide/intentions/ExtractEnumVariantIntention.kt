@@ -10,6 +10,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.search.searches.ReferencesSearch
+import com.intellij.psi.util.PsiTreeUtil
+import org.rust.ide.inspections.import.RsImportHelper.importElements
 import org.rust.ide.refactoring.RsInPlaceVariableIntroducer
 import org.rust.lang.core.ARBITRARY_ENUM_DISCRIMINANT
 import org.rust.lang.core.FeatureAvailability
@@ -59,7 +61,10 @@ class ExtractEnumVariantIntention : RsElementBaseIntentionAction<ExtractEnumVari
         val inserted = enum.parent.addBefore(struct, enum) as RsStructItem
 
         for (usage in ReferencesSearch.search(ctx.variant)) {
-            element.replaceUsage(usage.element, name)
+            val occurrence = element.replaceUsage(usage.element, name) as? RsReferenceElement ?: continue
+            if (occurrence.reference?.resolve() == null) {
+                importElements(occurrence, setOf(inserted))
+            }
         }
 
         val tupleField = RsPsiFactory.TupleField(
@@ -109,7 +114,7 @@ class ExtractEnumVariantIntention : RsElementBaseIntentionAction<ExtractEnumVari
             editor.caretModel.moveToOffset(range.startOffset)
 
             PsiDocumentManager.getInstance(project).doPostponedOperationsAndUnblockDocument(editor.document)
-            RsInPlaceVariableIntroducer(inserted, editor, project, "choose struct name")
+            RsInPlaceVariableIntroducer(inserted, editor, project, "choose struct name", arrayOf(replaced))
                 .performInplaceRefactoring(null)
         }
 
@@ -187,7 +192,7 @@ private sealed class VariantElement(val toBeReplaced: PsiElement) {
 
     abstract fun createStruct(vis: String?, name: String, typeParameters: String, whereClause: String): RsStructItem
 
-    abstract fun replaceUsage(element: PsiElement, name: String)
+    abstract fun replaceUsage(element: PsiElement, name: String): PsiElement?
 
     protected fun formatFields(): String {
         val fields = toBeReplaced.copy()
@@ -231,33 +236,35 @@ private class TupleVariant(fields: RsTupleFields) : VariantElement(fields) {
         return factory.createStruct("${formattedVis}struct $name$typeParameters$fields$whereClause;")
     }
 
-    override fun replaceUsage(element: PsiElement, name: String) {
-        if (replaceTuplePattern(element, name)) return
-        replaceTupleCall(element, name)
-    }
-
-    private fun replaceTupleCall(element: PsiElement, name: String): Boolean {
-        val parent = element.ancestorStrict<RsCallExpr>() ?: return false
-        val call = factory.createFunctionCall(name, parent.valueArgumentList.text.trim('(', ')'))
-        val binding = factory.createFunctionCall(element.text, listOf(call))
-        parent.replace(binding)
-        return true
-    }
-
-    private fun replaceTuplePattern(element: PsiElement, name: String): Boolean {
-        val parent = element.ancestorStrict<RsPatTupleStruct>() ?: return false
-        val binding = factory.createPatTupleStruct(name, parent.patList)
-
-        for (pat in parent.patList) {
-            val comma = pat.nextSibling
-            pat.delete()
-            if (comma.text == ",") {
-                comma.delete()
+    override fun replaceUsage(element: PsiElement, name: String): PsiElement? {
+        val replacedUsage = when (val parent = PsiTreeUtil.getParentOfType(
+            element,
+            RsPatTupleStruct::class.java,
+            RsCallExpr::class.java
+        )) {
+            is RsPatTupleStruct -> {
+                val replacedParent = replaceTuplePattern(parent, name)
+                replacedParent.patList.firstOrNull()
             }
+            is RsCallExpr -> {
+                val replacedParent = replaceTupleCall(parent, name)
+                replacedParent.valueArgumentList.exprList.firstOrNull()
+            }
+            else -> null
         }
+        return replacedUsage?.descendantOfTypeOrSelf<RsReferenceElement>()
+    }
 
-        parent.addAfter(binding, parent.lparen)
-        return true
+    private fun replaceTuplePattern(element: RsPatTupleStruct, name: String): RsPatTupleStruct {
+        val innerPat = factory.createPatTupleStruct(name, element.patList)
+        val binding = factory.createPatTupleStruct(element.path.text, listOf(innerPat))
+        return element.replace(binding) as RsPatTupleStruct
+    }
+
+    private fun replaceTupleCall(element: RsCallExpr, name: String): RsCallExpr {
+        val call = factory.createFunctionCall(name, element.valueArgumentList.text.trim('(', ')'))
+        val binding = factory.createFunctionCall(element.expr.text, listOf(call))
+        return element.replace(binding) as RsCallExpr
     }
 }
 
@@ -270,26 +277,36 @@ private class StructVariant(fields: RsBlockFields) : VariantElement(fields) {
         return factory.createStruct("${formattedVis}struct $name$typeParameters$whereClause$fields")
     }
 
-    override fun replaceUsage(element: PsiElement, name: String) {
-        if (replaceStructPattern(element, name)) return
-        replaceStructLiteral(element, name)
+    override fun replaceUsage(element: PsiElement, name: String): PsiElement? {
+        val replacedUsage = when (val parent = PsiTreeUtil.getParentOfType(
+            element,
+            RsPatStruct::class.java,
+            RsStructLiteral::class.java
+        )) {
+            is RsPatStruct -> {
+                val replacedParent = replaceStructPattern(parent, name)
+                replacedParent.patList.firstOrNull()
+            }
+            is RsStructLiteral -> {
+                val replacedParent = replaceStructLiteral(parent, name)
+                replacedParent.valueArgumentList.exprList.firstOrNull()
+            }
+            else -> null
+        }
+        return replacedUsage?.descendantOfTypeOrSelf<RsReferenceElement>()
     }
 
-    private fun replaceStructPattern(element: PsiElement, name: String): Boolean {
-        val parent = element.ancestorStrict<RsPatStruct>() ?: return false
-        val path = parent.path
-        val binding = factory.createPatStruct(name, parent.patFieldList, parent.patRest)
+    private fun replaceStructPattern(element: RsPatStruct, name: String): RsPatTupleStruct {
+        val path = element.path
+        val binding = factory.createPatStruct(name, element.patFieldList, element.patRest)
         val newPat = factory.createPatTupleStruct(path.text, listOf(binding))
-        parent.replace(newPat)
-        return true
+        return element.replace(newPat) as RsPatTupleStruct
     }
 
-    private fun replaceStructLiteral(element: PsiElement, name: String): Boolean {
-        val parent = element.ancestorStrict<RsStructLiteral>() ?: return false
-        val literal = factory.createStructLiteral(name, parent.structLiteralBody.text)
-        val binding = factory.createFunctionCall(element.text, listOf(literal))
-        parent.replace(binding)
-        return true
+    private fun replaceStructLiteral(element: RsStructLiteral, name: String): RsCallExpr {
+        val literal = factory.createStructLiteral(name, element.structLiteralBody.text)
+        val binding = factory.createFunctionCall(element.path.text, listOf(literal))
+        return element.replace(binding) as RsCallExpr
     }
 }
 
@@ -342,7 +359,7 @@ private data class CollectLifetimesVisitor(
     }
 }
 
-fun gatherLifetimes(
+private fun gatherLifetimes(
     references: List<RsTypeReference>,
     lifetimes: List<RsLifetimeParameter>,
     parameters: List<RsTypeParameter>
