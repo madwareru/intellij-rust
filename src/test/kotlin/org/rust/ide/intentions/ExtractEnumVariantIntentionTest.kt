@@ -25,7 +25,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
             V2
         }
     """, """
-        struct /*caret*/V1(i32, bool, String);
+        struct /*caret*/V1(pub i32, pub bool, pub String);
 
         enum A {
             V1(V1),
@@ -39,7 +39,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
             V2
         }
     """, """
-        struct /*caret*/V1 { a: i32, b: bool, c: String }
+        struct /*caret*/V1 { pub a: i32, pub b: bool, pub c: String }
 
         enum A {
             V1(V1),
@@ -53,7 +53,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
             V2
         }
     """, """
-        struct /*caret*/V1<T>(T);
+        struct /*caret*/V1<T>(pub T);
 
         enum A<T> {
             V1(V1<T>),
@@ -70,7 +70,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
     """, """
         trait Trait {}
 
-        struct /*caret*/V1<T: Trait>(T);
+        struct /*caret*/V1<T: Trait>(pub T);
 
         enum A<T: Trait> {
             V1(V1<T>),
@@ -87,7 +87,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
     """, """
         trait Trait {}
 
-        struct /*caret*/V1<T>(T) where T: Trait;
+        struct /*caret*/V1<T>(pub T) where T: Trait;
 
         enum A<T> where T: Trait {
             V1(V1<T>),
@@ -104,7 +104,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
     """, """
         trait Trait {}
 
-        struct /*caret*/V1<T> where T: Trait { a: T }
+        struct /*caret*/V1<T> where T: Trait { pub a: T }
 
         enum A<T> where T: Trait {
             V1(V1<T>),
@@ -130,7 +130,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
             fn foo() -> S;
         }
 
-        struct /*caret*/V1<'a, 'b, T, S, U> where T: Trait + Trait2<S, Item=U>, 'a: 'b { a: &'a T, b: &'b T }
+        struct /*caret*/V1<'a, 'b, T, S, U> where T: Trait + Trait2<S, Item=U>, 'a: 'b { pub a: &'a T, pub b: &'b T }
 
         enum A<'a, 'b, 'c, T, S, R, U> where T: Trait + Trait2<S, Item=U>, R: Trait, 'a: 'b + 'c, 'b: 'c {
             V1(V1<'a, 'b, T, S, U>),
@@ -143,7 +143,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
             /*caret*/V1 { a: &'a u32, b: &'b u32 }
         }
     """, """
-        struct /*caret*/V1<'a: 'b, 'b: 'a> { a: &'a u32, b: &'b u32 }
+        struct /*caret*/V1<'a: 'b, 'b: 'a> { pub a: &'a u32, pub b: &'b u32 }
 
         enum A<'a: 'b, 'b: 'a> {
             V1(V1<'a, 'b>)
@@ -160,7 +160,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
     """, """
         trait Sync {}
 
-        struct /*caret*/V1<'a, T: 'a>(T) where &'a T: Sync;
+        struct /*caret*/V1<'a, T: 'a>(pub T) where &'a T: Sync;
 
         enum S<'a, T: 'a> where &'a T: Sync {
             V1(V1<'a, T>),
@@ -178,7 +178,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
     """, """
         trait Sync {}
 
-        struct /*caret*/V1<'a: 'b, 'b, T: 'a>(&'a T) where &'b T: Sync;
+        struct /*caret*/V1<'a: 'b, 'b, T: 'a>(pub &'a T) where &'b T: Sync;
 
         enum S<'a: 'b, 'b, T: 'a> where &'b T: Sync {
             V1(V1<'a, 'b, T>),
@@ -195,7 +195,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
     """, """
         trait Trait {}
 
-        struct /*caret*/V1<const T: usize> { a: [u32; T] }
+        struct /*caret*/V1<const T: usize> { pub a: [u32; T] }
 
         enum A<const T: usize> {
             V1(V1<{ T }>),
@@ -209,7 +209,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
             V2
         }
     """, """
-        struct /*caret*/V1<'a>(&'a u32);
+        struct /*caret*/V1<'a>(pub &'a u32);
 
         enum A<'a> {
             V1(V1<'a>),
@@ -227,7 +227,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
     """, """
         struct S<X> { a: X }
 
-        struct /*caret*/V1<'a, T1, T2, T4>(T1, &'a T2, S<S<T4>>);
+        struct /*caret*/V1<'a, T1, T2, T4>(pub T1, pub &'a T2, pub S<S<T4>>);
 
         enum A<'a, T1, T2, T3, T4> {
             V1(V1<'a, T1, T2, T4>),
@@ -245,7 +245,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
     """, """
         struct S<X> { a: X }
 
-        struct /*caret*/V1<'a>(S<S<&'a u32>>);
+        struct /*caret*/V1<'a>(pub S<S<&'a u32>>);
 
         enum A<'a, 'b> {
             V1(V1<'a>),
@@ -270,7 +270,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
             }
         }
     """, """
-        struct /*caret*/V1(u32, bool, i32);
+        struct /*caret*/V1(pub u32, pub bool, pub i32);
 
         enum A {
             V1(V1)
@@ -306,7 +306,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
             }
         }
     """, """
-        struct /*caret*/V1 { x: u32, y: bool, z: i32 }
+        struct /*caret*/V1 { pub x: u32, pub y: bool, pub z: i32 }
 
         enum A {
             V1(V1)
@@ -337,7 +337,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
             let v = E::V1 { x: 42, y: 50 /* comment */, z: 3 };
         }
     """, """
-        struct /*caret*/V1 { x: i32, y: u32, z: u32 }
+        struct /*caret*/V1 { pub x: i32, pub y: u32, pub z: u32 }
 
         enum E {
             V1(V1),
@@ -362,7 +362,7 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
             let v = E::V1(1, /*comment*/ 2);
         }
     """, """
-        struct /*caret*/V1(i32, u32);
+        struct /*caret*/V1(pub i32, pub u32);
 
         enum E {
             V1(V1),
@@ -381,9 +381,37 @@ class ExtractEnumVariantIntentionTest : RsIntentionTestBase(ExtractEnumVariantIn
             V2
         }
     """, """
-        pub struct /*caret*/V1 { a: i32, b: bool, c: String }
+        pub struct /*caret*/V1 { pub a: i32, pub b: bool, pub c: String }
 
         pub enum A {
+            V1(V1),
+            V2
+        }
+    """)
+
+    fun `test add pub to all struct's fields with default vis`() = doAvailableTest("""
+        enum A {
+            /*caret*/V1 { /* comment */a: i32, /* comment */b: i32, pub c: i32, pub(crate) d: i32 },
+            V2
+        }
+    """, """
+        struct /*caret*/V1 { /* comment */pub a: i32, /* comment */pub b: i32, pub c: i32, pub(crate) d: i32 }
+
+        enum A {
+            V1(V1),
+            V2
+        }
+    """)
+
+    fun `test add pub to all tuple's fields with default vis`() = doAvailableTest("""
+        enum A {
+            /*caret*/V1(/* comment */i32, /* comment */i32, pub i32, pub(crate) i32),
+            V2
+        }
+    """, """
+        struct /*caret*/V1(/* comment */pub i32, /* comment */pub i32, pub i32, pub(crate) i32);
+
+        enum A {
             V1(V1),
             V2
         }

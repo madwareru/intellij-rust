@@ -14,10 +14,7 @@ import org.rust.ide.refactoring.RsInPlaceVariableIntroducer
 import org.rust.lang.core.ARBITRARY_ENUM_DISCRIMINANT
 import org.rust.lang.core.FeatureAvailability
 import org.rust.lang.core.psi.*
-import org.rust.lang.core.psi.ext.ancestorStrict
-import org.rust.lang.core.psi.ext.bounds
-import org.rust.lang.core.psi.ext.isFieldless
-import org.rust.lang.core.psi.ext.parentEnum
+import org.rust.lang.core.psi.ext.*
 import org.rust.lang.core.types.consts.Const
 import org.rust.lang.core.types.consts.CtConstParameter
 import org.rust.lang.core.types.infer.TypeVisitor
@@ -191,14 +188,47 @@ private sealed class VariantElement(val toBeReplaced: PsiElement) {
     abstract fun createStruct(vis: String?, name: String, typeParameters: String, whereClause: String): RsStructItem
 
     abstract fun replaceUsage(element: PsiElement, name: String)
+
+    protected fun formatFields(): String {
+        val fields = toBeReplaced.copy()
+
+        val decls: List<RsFieldDecl> = when (fields) {
+            is RsBlockFields -> fields.namedFieldDeclList
+            is RsTupleFields -> fields.tupleFieldDeclList
+            else -> error("unreachable")
+        }
+
+        val declsWithoutVis = decls.filter { it.vis == null }
+        if (declsWithoutVis.isNotEmpty()) {
+            val pub = factory.createPub()
+            val whitespace = factory.createWhitespace(" ")
+            for (field in declsWithoutVis) {
+                when (field) {
+                    is RsNamedFieldDecl -> {
+                        field.addBefore(pub, field.identifier)
+                    }
+                    is RsTupleFieldDecl -> {
+                        val typeReference = field.typeReference
+                        field.addBefore(pub, typeReference)
+                        if (typeReference.refLikeType != null) {
+                            field.addBefore(whitespace, typeReference)
+                        }
+                    }
+                }
+            }
+        }
+
+        return fields.text
+    }
 }
 
-private class TupleVariant(val fields: RsTupleFields) : VariantElement(fields) {
+private class TupleVariant(fields: RsTupleFields) : VariantElement(fields) {
     override val typeReferences: List<RsTypeReference> = fields.tupleFieldDeclList.map { it.typeReference }
 
     override fun createStruct(vis: String?, name: String, typeParameters: String, whereClause: String): RsStructItem {
         val formattedVis = if (vis == null) "" else "$vis "
-        return factory.createStruct("${formattedVis}struct $name$typeParameters${fields.text}$whereClause;")
+        val fields = formatFields()
+        return factory.createStruct("${formattedVis}struct $name$typeParameters$fields$whereClause;")
     }
 
     override fun replaceUsage(element: PsiElement, name: String) {
@@ -231,12 +261,13 @@ private class TupleVariant(val fields: RsTupleFields) : VariantElement(fields) {
     }
 }
 
-private class StructVariant(val fields: RsBlockFields) : VariantElement(fields) {
+private class StructVariant(fields: RsBlockFields) : VariantElement(fields) {
     override val typeReferences: List<RsTypeReference> = fields.namedFieldDeclList.mapNotNull { it.typeReference }
 
     override fun createStruct(vis: String?, name: String, typeParameters: String, whereClause: String): RsStructItem {
         val formattedVis = if (vis == null) "" else "$vis "
-        return factory.createStruct("${formattedVis}struct $name$typeParameters$whereClause${fields.text}")
+        val fields = formatFields()
+        return factory.createStruct("${formattedVis}struct $name$typeParameters$whereClause$fields")
     }
 
     override fun replaceUsage(element: PsiElement, name: String) {
