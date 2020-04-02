@@ -894,6 +894,11 @@
         <registryKey key="org.rust.lang.type.alias.threshold" defaultValue="10" restartRequired="false"
                      description="Maximum number of type aliases to take into account during `impl`s search"/>
 
+        <!-- Move refactoring -->
+
+        <refactoring.moveHandler implementation="org.rust.ide.refactoring.move.RsMoveFilesOrDirectoriesHandler"
+                                 order="first, before moveJavaFileOrDir, before kotlin.moveFilesOrDirectories"/>
+
     </extensions>
 
     <extensionPoints>
