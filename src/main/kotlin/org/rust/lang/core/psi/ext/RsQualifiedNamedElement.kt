@@ -32,6 +32,27 @@ val RsQualifiedNamedElement.qualifiedName: String?
         return "$cargoTarget$inCratePath"
     }
 
+fun RsQualifiedNamedElement.qualifiedNameRelativeTo(mod: RsMod): String? {
+    val crateRelativePath = crateRelativePath
+    if (mod.crateRoot != crateRoot || crateRelativePath == null) {
+        return qualifiedName
+    }
+
+    val modPathPrefix = mod.crateRelativePath?.let { "$it::" }
+    return if (containingMod.superMods.contains(mod)
+        && modPathPrefix != null
+        && crateRelativePath.startsWith(modPathPrefix)
+    ) {
+        var result = crateRelativePath.removePrefix(modPathPrefix)
+        if (cargoWorkspace?.packages?.any { result.startsWith("${it.normName}::") } == true) {
+            result = "self::$result"
+        }
+        result
+    } else {
+        "crate$crateRelativePath"
+    }
+}
+
 @Suppress("DataClassPrivateConstructor")
 data class RsQualifiedName private constructor(
     val crateName: String,
