@@ -60,8 +60,11 @@ class ExtractEnumVariantIntention : RsElementBaseIntentionAction<ExtractEnumVari
         val struct = element.createStruct(enum.vis?.text, name, typeParametersText, whereClause)
         val inserted = enum.parent.addBefore(struct, enum) as RsStructItem
 
+        val occurrences = mutableListOf<RsReferenceElement>()
         for (usage in ReferencesSearch.search(ctx.variant)) {
             val occurrence = element.replaceUsage(usage.element, name) as? RsReferenceElement ?: continue
+            occurrences.add(occurrence)
+
             if (occurrence.reference?.resolve() == null) {
                 importElements(occurrence, setOf(inserted))
             }
@@ -72,9 +75,11 @@ class ExtractEnumVariantIntention : RsElementBaseIntentionAction<ExtractEnumVari
             addPub = false // enum variant's fields are pub by default
         )
         val newFields = factory.createTupleFields(listOf(tupleField))
-        val replaced = element.toBeReplaced.replace(newFields)
+        val replaced = element.toBeReplaced.replace(newFields) as RsTupleFields
+        replaced.descendantOfTypeStrict<RsPath>()?.let { occurrences.add(it) }
 
-        offerStructRename(project, editor, inserted, replaced)
+        val additionalElementsToRename = occurrences.filter { it.reference?.resolve() != inserted }
+        offerStructRename(project, editor, inserted, additionalElementsToRename)
     }
 
     companion object {
@@ -109,12 +114,17 @@ class ExtractEnumVariantIntention : RsElementBaseIntentionAction<ExtractEnumVari
         private fun matchesConstParameter(ref: RsTypeReference, parameter: RsConstParameter): Boolean =
             ref.type.visitWith(HasConstParameterVisitor(parameter))
 
-        private fun offerStructRename(project: Project, editor: Editor, inserted: RsStructItem, replaced: PsiElement) {
+        private fun offerStructRename(
+            project: Project,
+            editor: Editor,
+            inserted: RsStructItem,
+            additionalElementsToRename: List<PsiElement>
+        ) {
             val range = inserted.identifier?.textRange ?: return
             editor.caretModel.moveToOffset(range.startOffset)
 
             PsiDocumentManager.getInstance(project).doPostponedOperationsAndUnblockDocument(editor.document)
-            RsInPlaceVariableIntroducer(inserted, editor, project, "choose struct name", arrayOf(replaced))
+            RsInPlaceVariableIntroducer(inserted, editor, project, "choose struct name", additionalElementsToRename)
                 .performInplaceRefactoring(null)
         }
 
